@@ -1,5 +1,3 @@
-Add file ▸ Create new file
-File name: scripts/deploy.py
 import boto3, mimetypes, os, pathlib
 
 s3 = boto3.client("s3", region_name=os.environ["REGION"])
