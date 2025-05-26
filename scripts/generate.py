@@ -1,5 +1,3 @@
-Add file ▸ Create new file
-File name: scripts/generate.py
 import os, pathlib, datetime, openai, markdown
 from suggest_provider import get_daily
 
