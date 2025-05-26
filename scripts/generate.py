@@ -1,11 +1,11 @@
 import os, pathlib, datetime, openai, markdown, time
 from suggest_provider import get_daily
 
-openai.api_key = os.environ["OPENAI_API_KEY"]     #  ← вернуть
-out_dir = pathlib.Path("site")                    #  ← вернуть
-out_dir.mkdir(exist_ok=True)                      #  ← вернуть
+openai.api_key = os.environ["OPENAI_API_KEY"]
+out_dir = pathlib.Path("site")
+out_dir.mkdir(exist_ok=True)
 
-for topic in get_daily():         # 30 подсказок
+for topic in get_daily():                 # 30 подсказок
     resp = openai.ChatCompletion.create(
         model="gpt-4o-mini",
         messages=[{"role": "user",
@@ -16,4 +16,4 @@ for topic in get_daily():         # 30 подсказок
     fname = f"{datetime.date.today()}-{slug}.md"
     (out_dir / fname).write_text(md, encoding="utf-8")
 
-    time.sleep(21)   # ≤ 3 запросов в минуту
+    time.sleep(30)          # ≤ 100 000 токенов/мин
