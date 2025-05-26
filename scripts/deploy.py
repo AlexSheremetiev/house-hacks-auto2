@@ -1,6 +1,10 @@
 import boto3, mimetypes, os, pathlib
 
-s3 = boto3.client("s3", region_name=os.environ["REGION"])
+s3 = boto3.client(
+    "s3",
+    region_name=os.getenv("REGION"),
+    endpoint_url="https://storage.yandexcloud.net"
+)
 bucket = os.environ["BUCKET"]
 root = pathlib.Path("site")
 
