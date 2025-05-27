@@ -6,7 +6,7 @@ out_dir = pathlib.Path("site")
 out_dir.mkdir(exist_ok=True)
 
 def ask_gpt(topic: str) -> str:
-    """Запрашиваем GPT-4o; при 100 K TPM ждём и пробуем снова."""
+    """Запрашиваем GPT-4о; при 100 K TPM ждём и пробуем снова."""
     while True:
         try:
             resp = openai.ChatCompletion.create(
@@ -21,11 +21,11 @@ def ask_gpt(topic: str) -> str:
             print("⬇  TPM limit, waiting 70 s…")
             time.sleep(70)
 
-for topic in get_daily():                 # 30 подсказок
+for topic in get_daily()[:10]:          # максимум 10 статей
     md = ask_gpt(topic)
 
     slug  = "-".join(topic.split()[:6])
     fname = f"{datetime.date.today()}-{slug}.md"
     (out_dir / fname).write_text(md, encoding="utf-8")
 
-    time.sleep(30)                        # пауза для RPM-лимита
+    time.sleep(30)                      # пауза для RPM-лимита
