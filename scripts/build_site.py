@@ -1,18 +1,19 @@
 import pathlib
+from datetime import datetime, timezone          # ← добавили timezone
 import markdown
 from feedgen.feed import FeedGenerator
-from datetime import datetime
 
-root = pathlib.Path("site")          # здесь лежат будущие файлы
+# Папка, где лежат будущие файлы сайта
+root = pathlib.Path("site")
 
-# ---------- 1. md  →  html ----------
+# ---------- 1. конвертируем каждый *.md → *.html ----------
 for md_path in root.glob("*.md"):
     html_body = markdown.markdown(md_path.read_text(encoding="utf-8"))
     html_page = f"""<!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8">
-  <title>{md_path.stem}</title>
+    <meta charset="utf-8">
+    <title>{md_path.stem}</title>
 </head>
 <body>
 {html_body}
@@ -20,11 +21,8 @@ for md_path in root.glob("*.md"):
 </html>"""
     (root / f"{md_path.stem}.html").write_text(html_page, encoding="utf-8")
 
-# ---------- 2. индексная страница ----------
-links = [
-    f"<li><a href='{p.stem}.html'>{p.stem}</a></li>"
-    for p in root.glob("*.md")
-]
+# ---------- 2. создаём индексную страницу ----------
+links = [f'<li><a href="{p.stem}.html">{p.stem}</a></li>' for p in root.glob("*.md")]
 index_html = f"""<!DOCTYPE html>
 <html lang="ru">
 <head><meta charset="utf-8"><title>Proste-hack</title></head>
@@ -35,17 +33,19 @@ index_html = f"""<!DOCTYPE html>
 </html>"""
 (root / "index.html").write_text(index_html, encoding="utf-8")
 
-# ---------- 3. RSS-фид ----------
+# ---------- 3. собираем RSS-фид ----------
 fg = FeedGenerator()
 fg.title("Proste-hack")
 fg.link(href="https://www.proste-hack.ru/", rel="alternate")
 fg.description("Автоблог")
 fg.language("ru")
+
 for md_path in sorted(root.glob("*.md"), reverse=True):
     fe = fg.add_entry()
     fe.title(md_path.stem)
     fe.link(href=f"https://www.proste-hack.ru/{md_path.stem}.html")
     fe.description(md_path.read_text(encoding="utf-8")[:500])
-    fe.pubDate(datetime.utcnow())
+    fe.pubDate(datetime.now(timezone.utc))        # ← теперь дата с тайм-зоной
 
-fg.rss_file(root / "feed.xml")      # сохраняем RSS
+# сохраняем RSS как site/feed.xml
+fg.rss_file(root / "feed.xml")
