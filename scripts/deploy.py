@@ -5,15 +5,21 @@ s3 = boto3.client(
     region_name=os.getenv("REGION"),
     endpoint_url="https://storage.yandexcloud.net"
 )
+
 bucket = os.environ["BUCKET"]
-root = pathlib.Path("site")
+root   = pathlib.Path("site")
 
 for file in root.rglob("*"):
     if file.is_file():
-        ctype, _ = mimetypes.guess_type(file.name)
+        # ---------- единственная правка ----------
+        ctype = "text/html" if file.suffix == ".html" else (
+            "application/rss+xml" if file.name == "feed.xml" else
+            mimetypes.guess_type(file.name)[0] or "text/plain"
+        )
+
         s3.upload_file(
             str(file), bucket, str(file.relative_to(root)),
-            ExtraArgs={"ContentType": ctype or "text/plain",
-                       "ACL": "public-read"}
+            ExtraArgs={"ContentType": ctype, "ACL": "public-read"},
         )
-print("▲ Upload complete")
+
+print("✓ Upload complete")
