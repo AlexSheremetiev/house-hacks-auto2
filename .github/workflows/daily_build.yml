@@ -13,11 +13,13 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.YC_SECRET_ACCESS_KEY }}
       BUCKET:  ${{ secrets.BUCKET_NAME }}
       REGION:  ${{ secrets.BUCKET_REGION }}
-    steps:
+     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
         with: { python-version: '3.11' }
+
       - run: pip install "openai==0.28.*" requests feedgen boto3 markdown
+
       - run: python scripts/generate.py
-      - run: python scripts/build_site.py
+      - run: python scripts/build_site.py    # ← новый шаг
       - run: python scripts/deploy.py
