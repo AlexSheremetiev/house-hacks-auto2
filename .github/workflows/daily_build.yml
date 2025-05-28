@@ -19,4 +19,5 @@ jobs:
         with: { python-version: '3.11' }
       - run: pip install "openai==0.28.*" requests feedgen boto3 markdown
       - run: python scripts/generate.py
+      - run: python scripts/build_site.py
       - run: python scripts/deploy.py
