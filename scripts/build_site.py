@@ -34,18 +34,32 @@ index_html = f"""<!DOCTYPE html>
 (root / "index.html").write_text(index_html, encoding="utf-8")
 
 # ---------- 3. собираем RSS-фид ----------
-fg = FeedGenerator()
-fg.title("Proste-hack")
-fg.link(href="https://www.proste-hack.ru/", rel="alternate")
-fg.description("Автоблог")
-fg.language("ru")
+from feedgen.feed import FeedGenerator
+import email.utils as eut  # ← для красивого pubDate
 
-for md_path in sorted(root.glob("*.md"), reverse=True):
+fg = FeedGenerator()
+fg.title('Проще, чем кажется')
+fg.link(href='https://www.proste-hack.ru/', rel='alternate')
+fg.description('Автоблогер')
+fg.language('ru')
+
+for md_path in sorted(root.glob('*.md'), reverse=True):
     fe = fg.add_entry()
     fe.title(md_path.stem)
-    fe.link(href=f"https://www.proste-hack.ru/{md_path.stem}.html")
-    fe.description(md_path.read_text(encoding="utf-8")[:500])
-    fe.pubDate(datetime.now(timezone.utc))        # ← теперь дата с тайм-зоной
+    fe.link(href=f'https://www.proste-hack.ru/{md_path.stem}.html')
+    # короткий анонс – первые 500 симв.
+    intro = md_path.read_text(encoding='utf-8')[:500]
+    fe.description(intro)
+
+    # уникальный идентификатор
+    fe.guid(f'https://www.proste-hack.ru/{md_path.stem}.html', permalink=True)
+
+    # полный текст без markdown-разметки → plain text
+    full = md_path.read_text(encoding='utf-8')
+    fe.element('yandex:full-text', full, {'xmlns:yandex': 'http://news.yandex.ru'})
+
+    # дата в RFC 1123 / GMT
+    fe.pubDate(eut.format_datetime(datetime.now(timezone.utc)))
 
 # сохраняем RSS как site/feed.xml
-fg.rss_file(root / "feed.xml")
+fg.rss_file(root / 'feed.xml')
