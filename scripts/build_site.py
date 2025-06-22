@@ -45,7 +45,7 @@ for md_path in sorted(root.glob("*.md"), reverse=True):
 
     # --- yandex:full-text (через ElementTree) ----------------
     ET.SubElement(
-        fe._entry,                               # «сырой» элемент <item>
+        fe.rss_entry,                               # «сырой» элемент <item>#   →  rss_entry
         '{http://news.yandex.ru}full-text'       # квалифицированное имя
     ).text = full
 
