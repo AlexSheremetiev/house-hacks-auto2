@@ -1,10 +1,7 @@
 import pathlib, markdown, email.utils as eut
 from datetime import datetime, timezone
 from feedgen.feed import FeedGenerator
-import xml.etree.ElementTree as ET
-
-# зарегистрируем пространство имён для Яндекса
-ET.register_namespace('yandex', 'http://news.yandex.ru')
+from lxml import etree as LET                     # ← lxml
 
 root = pathlib.Path("site")
 
@@ -34,6 +31,9 @@ fg.link(href='http://proste-hack.ru/', rel='alternate')
 fg.description('Автолайфхаки и бытовые трюки')
 fg.language('ru')
 
+# объявляем пространство имён (можно и опустить: feedgen добавит само)
+LET.register_namespace('yandex', 'http://news.yandex.ru')
+
 for md_path in sorted(root.glob("*.md"), reverse=True):
     full = md_path.read_text(encoding="utf-8")
 
@@ -44,9 +44,9 @@ for md_path in sorted(root.glob("*.md"), reverse=True):
     fe.guid(f'http://proste-hack.ru/{md_path.stem}.html', permalink=True)
     fe.pubDate(eut.format_datetime(datetime.now(timezone.utc)))
 
-    # <yandex:full-text>
-    ET.SubElement(
-        fe.rss_entry(),                          # ← элемент <item>
+    # тег <yandex:full-text>
+    LET.SubElement(
+        fe.rss_entry(),                    # lxml-элемент <item>
         '{http://news.yandex.ru}full-text'
     ).text = full
 
