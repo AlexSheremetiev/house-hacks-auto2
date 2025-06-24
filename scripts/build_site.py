@@ -69,10 +69,9 @@ for md_path in sorted(root.glob("*.md"), reverse=True):
     fe.guid(f"{site_url}/{md_path.stem}.html", permalink=True)
     fe.pubDate(eut.format_datetime(datetime.now(timezone.utc)))
 
-    # добавляем <yandex:genre> и <yandex:full-text>
-    item = fe.rss_entry()  # lxml-элемент <item>
-    LET.SubElement(item, "{http://news.yandex.ru}genre").text = "article"
-    LET.SubElement(item, "{http://news.yandex.ru}full-text").text = full_html
+    # два обязательных тега Дзена
+    fe.element('yandex:genre', 'article')
+    fe.element('yandex:full-text', full_html)
 
 # ───────────────────────────────────────────
 # 4. сохраняем как site/feed.xml
