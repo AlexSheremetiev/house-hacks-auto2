@@ -1,37 +1,60 @@
-import boto3, mimetypes, os, pathlib
+#!/usr/bin/env python3
+"""
+Заливает всё из папки site/ в бакет Object Storage.
+• типы контента расставляются корректно (HTML / RSS / остальное).
+• если переменные окружения не заданы — скрипт завершается с кодом 0,
+  чтобы workflow не падал (например, в форках без секретов).
+"""
 
-# —––  Настройка клиента Object Storage  ––––––––––––––––––––––
+import os
+import mimetypes
+import pathlib
+import sys
+
+import boto3
+
+# ─────────────────────────── 0. Читаем переменные среды
+bucket  = os.getenv("BUCKET", "").strip()
+region  = os.getenv("REGION", "").strip()
+key_id  = os.getenv("AWS_ACCESS_KEY_ID", "").strip()
+key_sec = os.getenv("AWS_SECRET_ACCESS_KEY", "").strip()
+
+if not all((bucket, region, key_id, key_sec)):
+    print("⚠ Object Storage credentials не заданы — пропускаю deploy.", file=sys.stderr)
+    sys.exit(0)        # выходим без ошибки → job останется зелёным
+
+# ─────────────────────────── 1. Коструируем клиента S3-совместимого API
 s3 = boto3.client(
     "s3",
-    region_name=os.getenv("REGION"),
-    endpoint_url="https://storage.yandexcloud.net",
+    region_name  = region,
+    endpoint_url = "https://storage.yandexcloud.net",
+    aws_access_key_id     = key_id,
+    aws_secret_access_key = key_sec,
 )
 
-bucket = os.environ["BUCKET"]          # имя бакета из Secrets
-root   = pathlib.Path("site")          # папка, которую заливаем
+root = pathlib.Path("site")
 
-# —––  Проходим по всем файлам внутри site/  ––––––––––––––––––
+# ─────────────────────────── 2. Проходим по всем файлам и грузим
 for file in root.rglob("*"):
-    if file.is_file():
+    if not file.is_file():
+        continue
 
-        # -------- корректно задаём Content-Type ---------------
-        if file.name == "feed.xml":
-            ctype = "application/rss+xml; charset=utf-8"
-        elif file.suffix == ".html":
-            ctype = "text/html; charset=utf-8"
-        else:
-            # берём из mimetypes, либо fallback на text/plain
-            ctype = mimetypes.guess_type(file.name)[0] or "text/plain"
+    # правильный Content-Type
+    if file.suffix == ".html":
+        ctype = "text/html"
+    elif file.name == "feed.xml":
+        ctype = "application/rss+xml; charset=utf-8"
+    else:
+        ctype = mimetypes.guess_type(file.name)[0] or "application/octet-stream"
 
-        # -------- загрузка в Object Storage -------------------
-        s3.upload_file(
-            str(file),                        # локальный путь
-            bucket,                           # бакет
-            str(file.relative_to(root)),      # ключ (относительный путь)
-            ExtraArgs={
-                "ContentType": ctype,
-                "ACL": "public-read",         # делаем файл публичным
-            },
-        )
+    key = str(file.relative_to(root))
+
+    s3.upload_file(
+        str(file),
+        bucket,
+        key,
+        ExtraArgs={"ContentType": ctype, "ACL": "public-read"},
+    )
+    print(f"⇡  {key}  →  {bucket}")
 
 print("✓ Upload complete")
