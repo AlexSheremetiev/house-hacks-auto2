@@ -1,31 +1,67 @@
-import os, pathlib, datetime, openai, markdown, time
-from suggest_provider import get_daily
+#!/usr/bin/env python3
+"""
+Генерирует одну Markdown-статью через OpenAI Chat Completion
+и кладёт её в папку site/ как YYYY-MM-DD-<slug>.md.
+
+• OPENAI_API_KEY берётся из переменных среды (Secrets)
+• модель — gpt-3.5-turbo (можете заменить на другую доступную)
+• встроен back-off на таймауты / 500 / rate-limit
+"""
+
+import os
+import re
+import sys
+import datetime as dt
+import pathlib
+
+import backoff
+import openai
+
+# ────────────────────────────── 0. Константы
+MODEL      = "gpt-3.5-turbo"
+MAX_TOKENS = 800
+ROOT_DIR   = pathlib.Path("site")
 
 openai.api_key = os.environ["OPENAI_API_KEY"]
-out_dir = pathlib.Path("site")
-out_dir.mkdir(exist_ok=True)
 
+RETRYABLE = (
+    openai.error.Timeout,
+    openai.error.APIError,
+    openai.error.APIConnectionError,
+    openai.error.RateLimitError,
+)
+
+# ────────────────────────────── 1. Запрос к GPT
+@backoff.on_exception(backoff.expo, RETRYABLE, max_time=180)
 def ask_gpt(topic: str) -> str:
-    """Запрашиваем GPT-4о; при 100 K TPM ждём и пробуем снова."""
-    while True:
-        try:
-            resp = openai.ChatCompletion.create(
-                model="gpt-4o-mini",
-                messages=[{
-                    "role": "user",
-                    "content": f"Напиши статью 2300–2700 знаков + FAQ по теме: {topic}. Заголовок ≤70 симв."
-                }]
-            )
-            return resp.choices[0].message.content.strip()
-        except openai.error.RateLimitError:
-            print("⬇  TPM limit, waiting 70 s…")
-            time.sleep(70)
+    """Возвращает Markdown-текст статьи по заданной теме."""
+    response = openai.ChatCompletion.create(
+        model       = MODEL,
+        temperature = 0.7,
+        max_tokens  = MAX_TOKENS,
+        stream      = False,
+        messages = [
+            {"role": "system",
+             "content": "Ты русский блогер-лайфхакер. Пиши понятно, с подзаголовками и шагами."},
+            {"role": "user",
+             "content": f"Напиши статью-инструкцию: {topic}"},
+        ],
+    )
+    return response.choices[0].message.content.strip()
 
-for topic in get_daily()[:10]:          # максимум 10 статей
-    md = ask_gpt(topic)
+# ────────────────────────────── 2. Главный скрипт
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        sys.exit("Использование:  python scripts/generate.py \"Тема статьи\"")
 
-    slug  = "-".join(topic.split()[:6])
-    fname = f"{datetime.date.today()}-{slug}.md"
-    (out_dir / fname).write_text(md, encoding="utf-8")
+    topic = sys.argv[1]
+    md_text = ask_gpt(topic)
 
-    time.sleep(30)                      # пауза для RPM-лимита
+    # Формируем slug (латиница, цифры, дефисы)
+    slug = re.sub(r"[^\w\-]+", "-", topic.lower()).strip("-")
+    filename = dt.date.today().strftime(f"%Y-%m-%d-{slug}.md")
+
+    ROOT_DIR.mkdir(exist_ok=True)
+    (ROOT_DIR / filename).write_text(md_text, encoding="utf-8")
+
+    print(f"✓ Сгенерировано: site/{filename}")
