@@ -1,27 +1,16 @@
 #!/usr/bin/env python3
 """
 Генерирует одну Markdown-статью через OpenAI Chat Completion
-и кладёт её в папку site/ как YYYY-MM-DD-<slug>.md.
-
-• OPENAI_API_KEY берётся из переменных среды (Secrets)
-• модель — gpt-3.5-turbo (можете заменить на другую доступную)
-• встроен back-off на таймауты / 500 / rate-limit
+и кладёт её в site/ как YYYY-MM-DD-<slug>.md.
+Если квота OpenAI исчерпана — создаёт stub-статью и завершает работу без ошибки.
 """
 
-import os
-import re
-import sys
-import datetime as dt
-import pathlib
+import os, re, sys, datetime as dt, pathlib, backoff, openai
+from openai.error import OpenAIError, RateLimitError
 
-import backoff
-import openai
-
-# ────────────────────────────── 0. Константы
 MODEL      = "gpt-3.5-turbo"
 MAX_TOKENS = 800
 ROOT_DIR   = pathlib.Path("site")
-
 openai.api_key = os.environ["OPENAI_API_KEY"]
 
 RETRYABLE = (
@@ -31,11 +20,10 @@ RETRYABLE = (
     openai.error.RateLimitError,
 )
 
-# ────────────────────────────── 1. Запрос к GPT
 @backoff.on_exception(backoff.expo, RETRYABLE, max_time=180)
 def ask_gpt(topic: str) -> str:
-    """Возвращает Markdown-текст статьи по заданной теме."""
-    response = openai.ChatCompletion.create(
+    """Пытается получить Markdown-статью; бросает OpenAIError, если не вышло."""
+    resp = openai.ChatCompletion.create(
         model       = MODEL,
         temperature = 0.7,
         max_tokens  = MAX_TOKENS,
@@ -47,21 +35,33 @@ def ask_gpt(topic: str) -> str:
              "content": f"Напиши статью-инструкцию: {topic}"},
         ],
     )
-    return response.choices[0].message.content.strip()
+    return resp.choices[0].message.content.strip()
 
-# ────────────────────────────── 2. Главный скрипт
+def slugify(text: str) -> str:
+    return re.sub(r"[^\w\-]+", "-", text.lower()).strip("-")
+
+def save_article(fname: str, md_text: str) -> None:
+    ROOT_DIR.mkdir(exist_ok=True)
+    (ROOT_DIR / fname).write_text(md_text, encoding="utf-8")
+    print(f"✓ Сохранено: site/{fname}")
+
+# ──────────────────────────────────────────  main
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        sys.exit("Использование:  python scripts/generate.py \"Тема статьи\"")
+        sys.exit("Использование: python scripts/generate.py \"Тема статьи\"")
 
     topic = sys.argv[1]
-    md_text = ask_gpt(topic)
+    today = dt.date.today().strftime("%Y-%m-%d")
+    fname = f"{today}-{slugify(topic)}.md"
 
-    # Формируем slug (латиница, цифры, дефисы)
-    slug = re.sub(r"[^\w\-]+", "-", topic.lower()).strip("-")
-    filename = dt.date.today().strftime(f"%Y-%m-%d-{slug}.md")
+    try:
+        md = ask_gpt(topic)
+    except (OpenAIError, RateLimitError) as e:
+        # Квота исчерпана или другая ошибка — пишем stub-файл
+        print(f"⚠ OpenAI error: {e}. Создаю заглушечную статью.")
+        md = f"# Пауза на генерацию\n\n" \
+             f"Сервис OpenAI временно недоступен (лимит или ошибка). " \
+             f"Попробуем снова в следующем запуске.\n"
+        fname = f"{today}-stub.md"
 
-    ROOT_DIR.mkdir(exist_ok=True)
-    (ROOT_DIR / filename).write_text(md_text, encoding="utf-8")
-
-    print(f"✓ Сгенерировано: site/{filename}")
+    save_article(fname, md)
