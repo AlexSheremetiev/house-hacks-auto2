@@ -1,10 +1,9 @@
 name: Daily Build
 
 on:
-  # запуск каждый день в 06:00 по Москве
+  # ежедневно в 06:00 по Мск  (UTC-3)
   schedule:
     - cron: '0 3 * * *'
-  # запуск вручную из вкладки Actions
   workflow_dispatch:
 
 jobs:
@@ -22,30 +21,29 @@ jobs:
       with:
         python-version: "3.11"
 
-    # 3. ставим зависимости, включая backoff
+    # 3. зависимости
     - name: Install dependencies
       run: |
         pip install backoff "openai==0.28.*" feedgen boto3 markdown
 
-    # 4. случайная тема из seeds.txt
+    # 4. случайная тема из seeds.txt (или дефолт)
     - name: Generate article
       run: |
-        # если seeds.txt пустой – дефолтная тема
         TOPIC=$(shuf -n1 seeds.txt 2>/dev/null || echo "Полезные лайфхаки для дома")
         echo "🔹 Тема статьи: $TOPIC"
         python scripts/generate.py "$TOPIC"
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
-    # 5. собираем сайт (HTML + RSS)
+    # 5. собираем сайт + RSS
     - name: Build site
       run: python scripts/build_site.py
 
-    # 6. выкладываем в бакет Object Storage
+    # 6. загружаем в Object Storage
     - name: Deploy to Yandex Object Storage
       run: python scripts/deploy.py
       env:
-        AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        BUCKET:                ${{ secrets.BUCKET }}
-        REGION:                ${{ secrets.REGION }}
+        AWS_ACCESS_KEY_ID:     ${{ secrets.YC_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.YC_SECRET_ACCESS_KEY }}
+        BUCKET:                ${{ secrets.BUCKET_NAME }}
+        REGION:                ${{ secrets.BUCKET_REGION }}
