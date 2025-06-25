@@ -1,40 +1,51 @@
 name: Daily Build
 
 on:
-  schedule:            # каждый день 03:00 MSK (= 00:00 UTC)
-    - cron: '0 0 * * *'
-  workflow_dispatch:   # ручной запуск из вкладки “Actions”
+  # запуск каждый день в 06:00 по Москве
+  schedule:
+    - cron: '0 3 * * *'
+  # запуск вручную из вкладки Actions
+  workflow_dispatch:
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
-    env:
-      OPENAI_API_KEY:      ${{ secrets.OPENAI_API_KEY }}
-      KEY_SOURCE:          ${{ secrets.KEY_SOURCE }}
-      AWS_ACCESS_KEY_ID:   ${{ secrets.YC_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.YC_SECRET_ACCESS_KEY }}
-      BUCKET:              ${{ secrets.BUCKET_NAME }}
-      REGION:              ${{ secrets.BUCKET_REGION }}
-
     steps:
-      # 1 — получаем код репозитория
-      - uses: actions/checkout@v4
+    # 1. берём код
+    - name: Checkout
+      uses: actions/checkout@v4
 
-      # 2 — ставим Python 3.11
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
+    # 2. ставим Python 3.11
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
 
-      # 3 — устанавливаем зависимости (одной командой)
-      - run: |
-          pip install "openai==0.28.*" feedgen boto3 markdown
+    # 3. ставим зависимости, включая backoff
+    - name: Install dependencies
+      run: |
+        pip install backoff "openai==0.28.*" feedgen boto3 markdown
 
-      # 4 — генерируем markdown-статьи
-      - run: python scripts/generate.py
+    # 4. случайная тема из seeds.txt
+    - name: Generate article
+      run: |
+        # если seeds.txt пустой – дефолтная тема
+        TOPIC=$(shuf -n1 seeds.txt 2>/dev/null || echo "Полезные лайфхаки для дома")
+        echo "🔹 Тема статьи: $TOPIC"
+        python scripts/generate.py "$TOPIC"
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
-      # 5 — строим сайт (html + RSS)
-      - run: python scripts/build_site.py
+    # 5. собираем сайт (HTML + RSS)
+    - name: Build site
+      run: python scripts/build_site.py
 
-      # 6 — заливаем в Object Storage
-      - run: python scripts/deploy.py
+    # 6. выкладываем в бакет Object Storage
+    - name: Deploy to Yandex Object Storage
+      run: python scripts/deploy.py
+      env:
+        AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        BUCKET:                ${{ secrets.BUCKET }}
+        REGION:                ${{ secrets.REGION }}
